@@ -50,7 +50,7 @@
 #if BITCOIN_TESTNET
 
 static const struct { uint32_t height; const char *hash; uint32_t timestamp; uint32_t target; } checkpoint_array[] = {
-    {       0, "0x0000000a23e3eb42dc87b61d4015c80ffd85471d34e2c7210c7ca63b78a58612", 1390822264, 0x1e00ffff }
+    {       0, "0x0000000a23e3eb42dc87b61d4015c80ffd85471d34e2c7210c7ca63b78a58612", 1390434081, 0x1e00ffff }
 };
 
 static const char *dns_seeds[] = {
