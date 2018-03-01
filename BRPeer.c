@@ -4,6 +4,8 @@
 //  Created by Aaron Voisine on 9/2/15.
 //  Copyright (c) 2015 breadwallet LLC.
 //
+//  Changed magic to MaxCoin on 02/26/18
+//
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
 //  of this software and associated documentation files (the "Software"), to deal
 //  in the Software without restriction, including without limitation the rights
@@ -44,9 +46,9 @@
 #include <arpa/inet.h>
 
 #if BITCOIN_TESTNET
-#define MAGIC_NUMBER 0x0709110b
+#define MAGIC_NUMBER 0x07bb110b // MaxCoin TestNet
 #else
-#define MAGIC_NUMBER 0xd9b4bef9
+#define MAGIC_NUMBER 0xd2bbbef9 // MaxCoin MainNet
 #endif
 #define HEADER_LENGTH      24
 #define MAX_MSG_LENGTH     0x02000000

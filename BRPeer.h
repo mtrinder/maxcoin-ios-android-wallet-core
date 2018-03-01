@@ -4,6 +4,8 @@
 //  Created by Aaron Voisine on 9/2/15.
 //  Copyright (c) 2015 breadwallet LLC.
 //
+//  Changed protocol port to MaxCoin on 02/26/18 by null3128
+//
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
 //  of this software and associated documentation files (the "Software"), to deal
 //  in the Software without restriction, including without limitation the rights
@@ -53,9 +55,9 @@ extern "C" {
 #endif
 
 #if BITCOIN_TESTNET
-#define STANDARD_PORT 18333
+#define STANDARD_PORT 18668
 #else
-#define STANDARD_PORT 8333
+#define STANDARD_PORT 8668
 #endif
 
 #define SERVICES_NODE_NETWORK 0x01 // services value indicating a node carries full blocks, not just headers
