@@ -30,7 +30,7 @@
 #include <assert.h>
 #include <pthread.h>
 
-#define BITCOIN_PRIVKEY      52
+#define BITCOIN_PRIVKEY      128
 #define BITCOIN_PRIVKEY_TEST 239
 
 #if __BIG_ENDIAN__ || (defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__) ||\
@@ -48,7 +48,7 @@
 #pragma clang diagnostic ignored "-Wunused-function"
 #pragma GCC diagnostic ignored "-Wunused-function"
 #pragma clang diagnostic ignored "-Wconditional-uninitialized"
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+//#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #include "secp256k1/src/basic-config.h"
 #include "secp256k1/src/secp256k1.c"
 #pragma clang diagnostic pop
@@ -402,3 +402,47 @@ int BRKeyRecoverPubKey(BRKey *key, UInt256 md, const void *compactSig, size_t si
 
     return r;
 }
+
+// MaxWallet version
+size_t MWKeyAddress(BRKey *key, char *addr, size_t addrLen)
+{
+    UInt160 hash;
+    uint8_t data[21];
+    uint8_t keccak[32];
+    uint8_t dataCheck[25];
+    
+    assert(key != NULL);
+    
+    hash = MWKeyHash160(key);
+    data[0] = BITCOIN_PUBKEY_ADDRESS;
+#if BITCOIN_TESTNET
+    data[0] = BITCOIN_PUBKEY_ADDRESS_TEST;
+#endif
+    UInt160Set(&data[1], hash);
+    
+    if (! UInt160IsZero(hash)) {
+        
+        BRKeccak256(keccak, data, sizeof(data));
+        memcpy(dataCheck, data, sizeof(data));
+        memcpy(&dataCheck[sizeof(data)], keccak, 4);
+        
+        addrLen = BRBase58Encode(addr, addrLen, dataCheck, sizeof(dataCheck));
+    }
+    else addrLen = 0;
+    
+    return addrLen;
+}
+
+// MaxWallet version
+UInt160 MWKeyHash160(BRKey *key)
+{
+    UInt160 hash = UINT160_ZERO;
+    size_t len;
+    
+    assert(key != NULL);
+    len = (key->compressed) ? 33 : 65;
+    BRHash160(&hash, key->pubKey, len);
+    return hash;
+}
+
+

@@ -109,6 +109,10 @@ size_t BRKeyCompactSign(const BRKey *key, void *compactSig, size_t sigLen, UInt2
 // assigns pubKey recovered from compactSig to key and returns true on success
 int BRKeyRecoverPubKey(BRKey *key, UInt256 md, const void *compactSig, size_t sigLen);
 
+size_t MWKeyAddress(BRKey *key, char *addr, size_t addrLen);
+
+UInt160 MWKeyHash160(BRKey *key);
+
 #ifdef __cplusplus
 }
 #endif
