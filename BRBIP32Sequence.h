@@ -97,6 +97,14 @@ void BRBIP32APIAuthKey(BRKey *key, const void *seed, size_t seedLen);
 // key used for BitID: https://github.com/bitid/bitid/blob/master/BIP_draft.md
 void BRBIP32BitIDKey(BRKey *key, const void *seed, size_t seedLen, uint32_t index, const char *uri);
 
+//*********************
+//  MaxWallet
+//*********************
+
+BRMasterPubKey WMBIP32MasterPubKey(const void *seed, size_t seedLen,
+                                   const uint8_t* (callbackPubkey)(UInt256* k, size_t* len),
+                                   UInt256* (callbackModAdd)(UInt256* a, UInt256* b));
+
 #ifdef __cplusplus
 }
 #endif

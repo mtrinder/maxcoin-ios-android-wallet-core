@@ -71,6 +71,36 @@ static void _CKDpriv(UInt256 *k, UInt256 *c, uint32_t i)
     mem_clean(buf, sizeof(buf));
 }
 
+static void _WMCKDpriv(UInt256 *k, UInt256 *c, uint32_t i,
+                       const uint8_t* (callbackPubkey)(UInt256* k, size_t* len),
+                       UInt256* (callbackModAdd)(UInt256* a, UInt256* b))
+{
+    uint8_t buf[sizeof(BRECPoint) + sizeof(i)];
+    UInt512 I;
+    
+    if (i & BIP32_HARD) {
+        buf[0] = 0;
+        UInt256Set(&buf[1], *k);
+    }
+    else
+    {
+        size_t pkLen;
+        const uint8_t* pubKey = callbackPubkey(k, &pkLen);
+        memcpy(buf, pubKey, pkLen);
+    }
+    
+    UInt32SetBE(&buf[sizeof(BRECPoint)], i);
+    
+    BRHMAC(&I, BRSHA512, sizeof(UInt512), c, sizeof(*c), buf, sizeof(buf)); // I = HMAC-SHA512(c, k|P(k) || i)
+    
+    k = callbackModAdd(k, (UInt256 *)&I); // k = IL + k (mod n)
+    
+    *c = *(UInt256 *)&I.u8[sizeof(UInt256)]; // c = IR
+    
+    var_clean(&I);
+    mem_clean(buf, sizeof(buf));
+}
+
 // Public parent key -> public child key
 //
 // CKDpub((Kpar, cpar), i) -> (Ki, ci) computes a child extended public key from the parent extended public key.
@@ -129,6 +159,46 @@ BRMasterPubKey BRBIP32MasterPubKey(const void *seed, size_t seedLen)
         BRKeySetSecret(&key, &secret, 1);
         var_clean(&secret, &chain);
         BRKeyPubKey(&key, &mpk.pubKey, sizeof(mpk.pubKey)); // path N(m/0H)
+        BRKeyClean(&key);
+    }
+    
+    return mpk;
+}
+
+// MaxWallet version
+BRMasterPubKey WMBIP32MasterPubKey(const void *seed, size_t seedLen,
+                                   const uint8_t* (callbackPubkey)(UInt256* k, size_t* len),
+                                   UInt256* (callbackModAdd)(UInt256* a, UInt256* b))
+{
+    BRMasterPubKey mpk = BR_MASTER_PUBKEY_NONE;
+    UInt512 I;
+    UInt256 secret, chain;
+    BRKey key;
+    
+    assert(seed != NULL || seedLen == 0);
+    
+    if (seed || seedLen == 0) {
+        BRHMAC(&I, BRSHA512, sizeof(UInt512), BIP32_SEED_KEY, strlen(BIP32_SEED_KEY), seed, seedLen);
+        secret = *(UInt256 *)&I;
+        chain = *(UInt256 *)&I.u8[sizeof(UInt256)];
+        var_clean(&I);
+        
+        MWKeySetSecret(&key, &secret, 1);
+        mpk.fingerPrint = MWKeyHash160(&key).u32[0];
+        
+        _WMCKDpriv(&secret, &chain, 0 | BIP32_HARD, callbackPubkey, callbackModAdd); // path m/0H
+        
+        mpk.chainCode = chain;
+
+        MWKeySetSecret(&key, &secret, 1);
+        var_clean(&secret, &chain);
+
+        size_t pkLen;
+        const uint8_t* pubKey = callbackPubkey(&(key.secret), &pkLen);
+        memcpy(key.pubKey, pubKey, pkLen);
+        key.compressed = (pkLen <= 33);
+
+        WMKeyPubKey(&key, &mpk.pubKey, sizeof(mpk.pubKey)); // path N(m/0H)
         BRKeyClean(&key);
     }
     
