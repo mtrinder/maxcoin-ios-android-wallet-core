@@ -63,6 +63,7 @@ static void _ctx_init()
 }
 
 // used in the creation of the private child key derivation
+//
 // adds 256bit big endian ints a and b (mod secp256k1 order) and stores the result in a
 // returns true on success
 int BRSecp256k1ModAdd(UInt256 *a, const UInt256 *b)
@@ -72,6 +73,7 @@ int BRSecp256k1ModAdd(UInt256 *a, const UInt256 *b)
 }
 
 // only used in BIP38 implementation - MaxWallet doesn't use BIP38
+//
 // multiplies 256bit big endian ints a and b (mod secp256k1 order) and stores the result in a
 // returns true on success
 int BRSecp256k1ModMul(UInt256 *a, const UInt256 *b)
@@ -81,6 +83,7 @@ int BRSecp256k1ModMul(UInt256 *a, const UInt256 *b)
 }
 
 // used to create a non-hardened child private key
+//
 // multiplies secp256k1 generator by 256bit big endian int i and stores the result in p
 // returns true on success
 int BRSecp256k1PointGen(BRECPoint *p, const UInt256 *i)
@@ -94,6 +97,7 @@ int BRSecp256k1PointGen(BRECPoint *p, const UInt256 *i)
 }
 
 // used in the public child key derivation
+//
 // multiplies secp256k1 generator by 256bit big endian int i and adds the result to ec-point p
 // returns true on success
 int BRSecp256k1PointAdd(BRECPoint *p, const UInt256 *i)
@@ -108,6 +112,7 @@ int BRSecp256k1PointAdd(BRECPoint *p, const UInt256 *i)
 }
 
 // used in the payment protocol
+//
 // multiplies secp256k1 ec-point p by 256bit big endian int i and stores the result in p
 // returns true on success
 int BRSecp256k1PointMul(BRECPoint *p, const UInt256 *i)
@@ -253,7 +258,8 @@ int MWKeySetPubKey(BRKey *key, const uint8_t *pubKey, size_t pkLen)
     return 1;
 }
 
-int BRKeySetPubKeyTest(BRKey *key, const uint8_t* (callback)(size_t* len))
+// MaxWallet version (test only)
+int MWKeySetPubKeyTest(BRKey *key, const uint8_t* (callback)(size_t* len))
 {
     secp256k1_pubkey pk;
     
@@ -318,7 +324,7 @@ size_t BRKeyPubKey(BRKey *key, void *pubKey, size_t pkLen)
 }
 
 // MaxWallet version
-size_t WMKeyPubKey(BRKey *key, void *pubKey, size_t pkLen)
+size_t MWKeyPubKey(BRKey *key, void *pubKey, size_t pkLen)
 {
     size_t size = (key->compressed) ? 33 : 65;
     

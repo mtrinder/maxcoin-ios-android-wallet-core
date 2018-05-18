@@ -120,11 +120,11 @@ size_t MWKeyAddress(BRKey *key, char *addr, size_t addrLen);
 
 int MWKeySetSecret(BRKey *key, const UInt256 *secret, int compressed);
     
-int BRKeySetPubKeyTest(BRKey *key, const uint8_t* (callback)(size_t* len));
+int MWKeySetPubKeyTest(BRKey *key, const uint8_t* (callback)(size_t* len));
 
 int MWKeySetPubKey(BRKey *key, const uint8_t *pubKey, size_t pkLen);
 
-size_t WMKeyPubKey(BRKey *key, void *pubKey, size_t pkLen);
+size_t MWKeyPubKey(BRKey *key, void *pubKey, size_t pkLen);
     
 #ifdef __cplusplus
 }

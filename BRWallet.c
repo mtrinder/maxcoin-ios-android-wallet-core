@@ -695,6 +695,46 @@ int BRWalletSignTransaction(BRWallet *wallet, BRTransaction *tx, int forkId, con
     return r;
 }
 
+// MaxWallet version
+int MWWalletSignTransaction(BRWallet *wallet, BRTransaction *tx, int forkId, const void *seed, size_t seedLen,
+                            const uint8_t* (callbackPubkey)(UInt256* k, size_t* len),
+                            UInt256* (callbackModAdd)(UInt256* a, UInt256* b))
+{
+    uint32_t j, internalIdx[tx->inCount], externalIdx[tx->inCount];
+    size_t i, internalCount = 0, externalCount = 0;
+    int r = 0;
+    
+    assert(wallet != NULL);
+    assert(tx != NULL);
+    pthread_mutex_lock(&wallet->lock);
+    
+    for (i = 0; tx && i < tx->inCount; i++) {
+        for (j = (uint32_t)array_count(wallet->internalChain); j > 0; j--) {
+            if (BRAddressEq(tx->inputs[i].address, &wallet->internalChain[j - 1])) internalIdx[internalCount++] = j - 1;
+        }
+        
+        for (j = (uint32_t)array_count(wallet->externalChain); j > 0; j--) {
+            if (BRAddressEq(tx->inputs[i].address, &wallet->externalChain[j - 1])) externalIdx[externalCount++] = j - 1;
+        }
+    }
+    
+    pthread_mutex_unlock(&wallet->lock);
+    
+    BRKey keys[internalCount + externalCount];
+    
+    if (seed) {
+        MWBIP32PrivKeyList(keys, internalCount, seed, seedLen, SEQUENCE_INTERNAL_CHAIN, internalIdx, callbackPubkey, callbackModAdd);
+        MWBIP32PrivKeyList(&keys[internalCount], externalCount, seed, seedLen, SEQUENCE_EXTERNAL_CHAIN, externalIdx, callbackPubkey, callbackModAdd);
+        // TODO: XXX wipe seed callback
+        seed = NULL;
+        if (tx) r = BRTransactionSign(tx, forkId, keys, internalCount + externalCount);
+        for (i = 0; i < internalCount + externalCount; i++) BRKeyClean(&keys[i]);
+    }
+    else r = -1; // user canceled authentication
+    
+    return r;
+}
+
 // true if the given transaction is associated with the wallet (even if it hasn't been registered)
 int BRWalletContainsTransaction(BRWallet *wallet, const BRTransaction *tx)
 {

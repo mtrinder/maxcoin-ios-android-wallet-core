@@ -71,7 +71,7 @@ static void _CKDpriv(UInt256 *k, UInt256 *c, uint32_t i)
     mem_clean(buf, sizeof(buf));
 }
 
-static void _WMCKDpriv(UInt256 *k, UInt256 *c, uint32_t i,
+static void _MWCKDpriv(UInt256 *k, UInt256 *c, uint32_t i,
                        const uint8_t* (callbackPubkey)(UInt256* k, size_t* len),
                        UInt256* (callbackModAdd)(UInt256* a, UInt256* b))
 {
@@ -134,6 +134,29 @@ static void _CKDpub(BRECPoint *K, UInt256 *c, uint32_t i)
     }
 }
 
+static void _MWCKDpub(BRECPoint *K, UInt256 *c, uint32_t i,
+                      const uint8_t* (callbackPointAdd)(unsigned char * k, size_t* len, UInt256* i))
+{
+    uint8_t buf[sizeof(*K) + sizeof(i)];
+    UInt512 I;
+    
+    if ((i & BIP32_HARD) != BIP32_HARD) { // can't derive private child key from public parent key
+        *(BRECPoint *)buf = *K;
+        UInt32SetBE(&buf[sizeof(*K)], i);
+        
+        BRHMAC(&I, BRSHA512, sizeof(UInt512), c, sizeof(*c), buf, sizeof(buf)); // I = HMAC-SHA512(c, P(K) || i)
+        
+        *c = *(UInt256 *)&I.u8[sizeof(UInt256)]; // c = IR
+        
+        size_t pkLen = sizeof(*K);
+        const uint8_t* pubKey = callbackPointAdd((unsigned char *)K, &pkLen, (UInt256 *)&I);
+        memcpy((unsigned char *)K, pubKey, pkLen);
+        
+        var_clean(&I);
+        mem_clean(buf, sizeof(buf));
+    }
+}
+
 // returns the master public key for the default BIP32 wallet layout - derivation path N(m/0H)
 BRMasterPubKey BRBIP32MasterPubKey(const void *seed, size_t seedLen)
 {
@@ -166,7 +189,7 @@ BRMasterPubKey BRBIP32MasterPubKey(const void *seed, size_t seedLen)
 }
 
 // MaxWallet version
-BRMasterPubKey WMBIP32MasterPubKey(const void *seed, size_t seedLen,
+BRMasterPubKey MWBIP32MasterPubKey(const void *seed, size_t seedLen,
                                    const uint8_t* (callbackPubkey)(UInt256* k, size_t* len),
                                    UInt256* (callbackModAdd)(UInt256* a, UInt256* b))
 {
@@ -186,7 +209,7 @@ BRMasterPubKey WMBIP32MasterPubKey(const void *seed, size_t seedLen,
         MWKeySetSecret(&key, &secret, 1);
         mpk.fingerPrint = MWKeyHash160(&key).u32[0];
         
-        _WMCKDpriv(&secret, &chain, 0 | BIP32_HARD, callbackPubkey, callbackModAdd); // path m/0H
+        _MWCKDpriv(&secret, &chain, 0 | BIP32_HARD, callbackPubkey, callbackModAdd); // path m/0H
         
         mpk.chainCode = chain;
 
@@ -198,7 +221,7 @@ BRMasterPubKey WMBIP32MasterPubKey(const void *seed, size_t seedLen,
         memcpy(key.pubKey, pubKey, pkLen);
         key.compressed = (pkLen <= 33);
 
-        WMKeyPubKey(&key, &mpk.pubKey, sizeof(mpk.pubKey)); // path N(m/0H)
+        MWKeyPubKey(&key, &mpk.pubKey, sizeof(mpk.pubKey)); // path N(m/0H)
         BRKeyClean(&key);
     }
     
@@ -218,6 +241,25 @@ size_t BRBIP32PubKey(uint8_t *pubKey, size_t pubKeyLen, BRMasterPubKey mpk, uint
 
         _CKDpub((BRECPoint *)pubKey, &chainCode, chain); // path N(m/0H/chain)
         _CKDpub((BRECPoint *)pubKey, &chainCode, index); // index'th key in chain
+        var_clean(&chainCode);
+    }
+    
+    return (! pubKey || sizeof(BRECPoint) <= pubKeyLen) ? sizeof(BRECPoint) : 0;
+}
+
+// MaxWallet version
+size_t MWBIP32PubKey(uint8_t *pubKey, size_t pubKeyLen, BRMasterPubKey mpk, uint32_t chain, uint32_t index,
+                     const uint8_t* (callbackPointAdd)(unsigned char * k, size_t* len, UInt256* i))
+{
+    UInt256 chainCode = mpk.chainCode;
+    
+    assert(memcmp(&mpk, &BR_MASTER_PUBKEY_NONE, sizeof(mpk)) != 0);
+    
+    if (pubKey && sizeof(BRECPoint) <= pubKeyLen) {
+        *(BRECPoint *)pubKey = *(BRECPoint *)mpk.pubKey;
+        
+        _MWCKDpub((BRECPoint *)pubKey, &chainCode, chain, callbackPointAdd); // path N(m/0H/chain)
+        _MWCKDpub((BRECPoint *)pubKey, &chainCode, index, callbackPointAdd); // index'th key in chain
         var_clean(&chainCode);
     }
     
@@ -254,6 +296,38 @@ void BRBIP32PrivKeyList(BRKey keys[], size_t keysCount, const void *seed, size_t
             s = secret;
             c = chainCode;
             _CKDpriv(&s, &c, indexes[i]); // index'th key in chain
+            BRKeySetSecret(&keys[i], &s, 1);
+        }
+        
+        var_clean(&secret, &chainCode, &c, &s);
+    }
+}
+
+// MaxWallet version
+void MWBIP32PrivKeyList(BRKey keys[], size_t keysCount, const void *seed, size_t seedLen, uint32_t chain, const uint32_t indexes[],
+                        const uint8_t* (callbackPubkey)(UInt256* k, size_t* len),
+                        UInt256* (callbackModAdd)(UInt256* a, UInt256* b))
+{
+    UInt512 I;
+    UInt256 secret, chainCode, s, c;
+    
+    assert(keys != NULL || keysCount == 0);
+    assert(seed != NULL || seedLen == 0);
+    assert(indexes != NULL || keysCount == 0);
+    
+    if (keys && keysCount > 0 && (seed || seedLen == 0) && indexes) {
+        BRHMAC(&I, BRSHA512, sizeof(UInt512), BIP32_SEED_KEY, strlen(BIP32_SEED_KEY), seed, seedLen);
+        secret = *(UInt256 *)&I;
+        chainCode = *(UInt256 *)&I.u8[sizeof(UInt256)];
+        var_clean(&I);
+        
+        _MWCKDpriv(&secret, &chainCode, 0 | BIP32_HARD, callbackPubkey, callbackModAdd); // path m/0H
+        _MWCKDpriv(&secret, &chainCode, chain, callbackPubkey, callbackModAdd); // path m/0H/chain
+        
+        for (size_t i = 0; i < keysCount; i++) {
+            s = secret;
+            c = chainCode;
+            _MWCKDpriv(&s, &c, indexes[i], callbackPubkey, callbackModAdd); // index'th key in chain
             BRKeySetSecret(&keys[i], &s, 1);
         }
         
