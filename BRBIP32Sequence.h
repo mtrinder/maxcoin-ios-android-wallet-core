@@ -101,17 +101,32 @@ void BRBIP32BitIDKey(BRKey *key, const void *seed, size_t seedLen, uint32_t inde
 //  MaxWallet
 //*********************
 
-BRMasterPubKey MWBIP32MasterPubKey(const void *seed, size_t seedLen,
-                                   const uint8_t* (callbackPubkey)(UInt256* k, size_t* len),
-                                   UInt256* (callbackModAdd)(UInt256* a, UInt256* b));
-
-size_t MWBIP32PubKey(uint8_t *pubKey, size_t pubKeyLen, BRMasterPubKey mpk, uint32_t chain, uint32_t index,
-                     const uint8_t* (callbackPointAdd)(unsigned char * k, size_t* len, UInt256* i));
-
-void MWBIP32PrivKeyList(BRKey keys[], size_t keysCount, const void *seed, size_t seedLen, uint32_t chain, const uint32_t indexes[],
-                        const uint8_t* (callbackPubkey)(UInt256* k, size_t* len),
-                        UInt256* (callbackModAdd)(UInt256* a, UInt256* b));
+const uint8_t* (*_BRBIP32PublicKeyFromSecret) (UInt256*, size_t*);
     
+UInt256* (*_BIP32DeriveChildPrivateKey) (UInt256*, UInt256*);
+    
+const uint8_t* (*_BIP32DeriveChildPublicKey)(unsigned char * k, size_t* len, UInt256* i);
+
+//*********************
+
+BRMasterPubKey MWBIP32MasterPubKey(const void *seed, size_t seedLen);
+
+size_t MWBIP32PubKey(uint8_t *pubKey, size_t pubKeyLen, BRMasterPubKey mpk, uint32_t chain, uint32_t index);
+
+void MWBIP32PrivKey(BRKey *key, const void *seed, size_t seedLen, uint32_t chain, uint32_t index);
+    
+void MWBIP32PrivKeyList(BRKey keys[], size_t keysCount, const void *seed, size_t seedLen, uint32_t chain, const uint32_t indexes[]);
+    
+void MWBIP32PrivKeyPath(BRKey *key, const void *seed, size_t seedLen, int depth, ...);
+    
+void MWBIP32vPrivKeyPath(BRKey *key, const void *seed, size_t seedLen, int depth, va_list vlist);
+    
+void MWBIP32APIAuthKey(BRKey *key, const void *seed, size_t seedLen);
+    
+void MWBIP32BitIDKey(BRKey *key, const void *seed, size_t seedLen, uint32_t index, const char *uri);
+    
+//*********************
+
 #ifdef __cplusplus
 }
 #endif

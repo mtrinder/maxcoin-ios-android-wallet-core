@@ -114,18 +114,28 @@ int BRKeyRecoverPubKey(BRKey *key, UInt256 md, const void *compactSig, size_t si
 //  MaxWallet
 //*********************
     
+int MWPrivKeyIsValid(const char *privKey);
+
+int MWKeySetPrivKey(BRKey *key, const char *privKey);
+    
+size_t MWKeyPrivKey(const BRKey *key, char *privKey, size_t pkLen);
+    
 UInt160 MWKeyHash160(BRKey *key);
 
 size_t MWKeyAddress(BRKey *key, char *addr, size_t addrLen);
 
 int MWKeySetSecret(BRKey *key, const UInt256 *secret, int compressed);
     
-int MWKeySetPubKeyTest(BRKey *key, const uint8_t* (callback)(size_t* len));
-
 int MWKeySetPubKey(BRKey *key, const uint8_t *pubKey, size_t pkLen);
 
 size_t MWKeyPubKey(BRKey *key, void *pubKey, size_t pkLen);
+
+size_t MWKeyPubKeyCopy(BRKey *key, void *pubKey, size_t pkLen);
     
+// Test only
+int MWKeySetPubKeyTest(BRKey *key);
+const uint8_t* (*_BRKeyTestCallback) (size_t*);
+
 #ifdef __cplusplus
 }
 #endif

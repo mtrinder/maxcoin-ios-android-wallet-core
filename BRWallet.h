@@ -203,9 +203,7 @@ int64_t BRBitcoinAmount(int64_t localAmount, double price);
 //  MaxWallet
 //*********************
 
-int MWWalletSignTransaction(BRWallet *wallet, BRTransaction *tx, int forkId, const void *seed, size_t seedLen,
-                            const uint8_t* (callbackPubkey)(UInt256* k, size_t* len),
-                            UInt256* (callbackModAdd)(UInt256* a, UInt256* b));
+int MWWalletSignTransaction(BRWallet *wallet, BRTransaction *tx, int forkId, const void *seed, size_t seedLen);
     
 #ifdef __cplusplus
 }

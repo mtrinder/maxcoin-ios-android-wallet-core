@@ -161,6 +161,40 @@ int BRPrivKeyIsValid(const char *privKey)
     return r;
 }
 
+// MaxWallet version
+int MWPrivKeyIsValid(const char *privKey)
+{
+    uint8_t data[34];
+    size_t dataLen, strLen;
+    int r = 0;
+    
+    assert(privKey != NULL);
+    
+    dataLen = BRBase58CheckDecode(data, sizeof(data), privKey);
+    strLen = strlen(privKey);
+    
+    if (dataLen == 33 || dataLen == 34) { // wallet import format: https://en.bitcoin.it/wiki/Wallet_import_format
+#if BITCOIN_TESTNET
+        r = (data[0] == BITCOIN_PRIVKEY_TEST);
+#else
+        r = (data[0] == BITCOIN_PRIVKEY);
+#endif
+    }
+    else if ((strLen == 30 || strLen == 22) && privKey[0] == 'S') { // mini private key format
+        char s[strLen + 2];
+        
+        strncpy(s, privKey, sizeof(s));
+        s[sizeof(s) - 2] = '?';
+        BRSHA256(data, s, sizeof(s) - 1);
+        mem_clean(s, sizeof(s));
+        r = (data[0] == 0);
+    }
+    else r = (strspn(privKey, "0123456789ABCDEFabcdef") == 64); // hex encoded key
+    
+    mem_clean(data, sizeof(data));
+    return r;
+}
+
 // assigns secret to key and returns true on success
 int BRKeySetSecret(BRKey *key, const UInt256 *secret, int compressed)
 {
@@ -197,7 +231,7 @@ int BRKeySetPrivKey(BRKey *key, const char *privKey)
 #if BITCOIN_TESTNET
     version = BITCOIN_PRIVKEY_TEST;
 #endif
-
+    
     assert(key != NULL);
     assert(privKey != NULL);
     
@@ -205,18 +239,60 @@ int BRKeySetPrivKey(BRKey *key, const char *privKey)
     if ((len == 30 || len == 22) && privKey[0] == 'S') {
         if (! BRPrivKeyIsValid(privKey)) return 0;
         BRSHA256(data, privKey, strlen(privKey));
-        r = MWKeySetSecret(key, (UInt256 *)data, 0);
+        r = BRKeySetSecret(key, (UInt256 *)data, 0);
     }
     else {
         len = BRBase58CheckDecode(data, sizeof(data), privKey);
         if (len == 0 || len == 28) len = BRBase58Decode(data, sizeof(data), privKey);
-
+        
         if (len < sizeof(UInt256) || len > sizeof(UInt256) + 2) { // treat as hex string
             for (len = 0; privKey[len*2] && privKey[len*2 + 1] && len < sizeof(data); len++) {
                 if (sscanf(&privKey[len*2], "%2hhx", &data[len]) != 1) break;
             }
         }
+        
+        if ((len == sizeof(UInt256) + 1 || len == sizeof(UInt256) + 2) && data[0] == version) {
+            r = BRKeySetSecret(key, (UInt256 *)&data[1], (len == sizeof(UInt256) + 2));
+        }
+        else if (len == sizeof(UInt256)) {
+            r = BRKeySetSecret(key, (UInt256 *)data, 0);
+        }
+    }
+    
+    mem_clean(data, sizeof(data));
+    return r;
+}
 
+// MaxWallet version
+int MWKeySetPrivKey(BRKey *key, const char *privKey)
+{
+    size_t len = strlen(privKey);
+    uint8_t data[34], version = BITCOIN_PRIVKEY;
+    int r = 0;
+    
+#if BITCOIN_TESTNET
+    version = BITCOIN_PRIVKEY_TEST;
+#endif
+    
+    assert(key != NULL);
+    assert(privKey != NULL);
+    
+    // mini private key format
+    if ((len == 30 || len == 22) && privKey[0] == 'S') {
+        if (! MWPrivKeyIsValid(privKey)) return 0;
+        BRSHA256(data, privKey, strlen(privKey));
+        r = MWKeySetSecret(key, (UInt256 *)data, 0);
+    }
+    else {
+        len = BRBase58CheckDecode(data, sizeof(data), privKey);
+        if (len == 0 || len == 28) len = BRBase58Decode(data, sizeof(data), privKey);
+        
+        if (len < sizeof(UInt256) || len > sizeof(UInt256) + 2) { // treat as hex string
+            for (len = 0; privKey[len*2] && privKey[len*2 + 1] && len < sizeof(data); len++) {
+                if (sscanf(&privKey[len*2], "%2hhx", &data[len]) != 1) break;
+            }
+        }
+        
         if ((len == sizeof(UInt256) + 1 || len == sizeof(UInt256) + 2) && data[0] == version) {
             r = MWKeySetSecret(key, (UInt256 *)&data[1], (len == sizeof(UInt256) + 2));
         }
@@ -224,7 +300,7 @@ int BRKeySetPrivKey(BRKey *key, const char *privKey)
             r = MWKeySetSecret(key, (UInt256 *)data, 0);
         }
     }
-
+    
     mem_clean(data, sizeof(data));
     return r;
 }
@@ -259,13 +335,11 @@ int MWKeySetPubKey(BRKey *key, const uint8_t *pubKey, size_t pkLen)
 }
 
 // MaxWallet version (test only)
-int MWKeySetPubKeyTest(BRKey *key, const uint8_t* (callback)(size_t* len))
+int MWKeySetPubKeyTest(BRKey *key)
 {
-    secp256k1_pubkey pk;
-    
     size_t pkLen;
     
-    const uint8_t* pubKey = callback(&pkLen);
+    const uint8_t* pubKey = _BRKeyTestCallback(&pkLen);
     
     assert(key != NULL);
     assert(pubKey != NULL);
@@ -275,7 +349,7 @@ int MWKeySetPubKeyTest(BRKey *key, const uint8_t* (callback)(size_t* len))
     BRKeyClean(key);
     memcpy(key->pubKey, pubKey, pkLen);
     key->compressed = (pkLen <= 33);
-    return secp256k1_ec_pubkey_parse(_ctx, &pk, key->pubKey, pkLen);
+    return 1;
 }
 
 // writes the WIF private key to privKey and returns the number of bytes writen, or pkLen needed if privKey is NULL
@@ -299,6 +373,26 @@ size_t BRKeyPrivKey(const BRKey *key, char *privKey, size_t pkLen)
     }
     else pkLen = 0;
     
+    return pkLen;
+}
+
+// MaxWallet version
+size_t MWKeyPrivKey(const BRKey *key, char *privKey, size_t pkLen)
+{
+    uint8_t data[34];
+    
+    assert(key != NULL);
+    
+    data[0] = BITCOIN_PRIVKEY;
+#if BITCOIN_TESTNET
+    data[0] = BITCOIN_PRIVKEY_TEST;
+#endif
+    
+    UInt256Set(&data[1], key->secret);
+    if (key->compressed) data[33] = 0x01;
+    pkLen = BRBase58CheckEncode(privKey, pkLen, data, (key->compressed) ? 34 : 33);
+    mem_clean(data, sizeof(data));
+
     return pkLen;
 }
 
@@ -326,12 +420,30 @@ size_t BRKeyPubKey(BRKey *key, void *pubKey, size_t pkLen)
 // MaxWallet version
 size_t MWKeyPubKey(BRKey *key, void *pubKey, size_t pkLen)
 {
+    static uint8_t empty[65]; // static vars initialize to zero
+    size_t size = (key->compressed) ? 33 : 65;
+
+    assert(key != NULL);
+    
+    if (memcmp(key->pubKey, empty, size) == 0) {
+        size_t pkLen2;
+        const uint8_t* pubKey = _BRBIP32PublicKeyFromSecret(&(key->secret), &pkLen2);
+        memcpy(key->pubKey, pubKey, pkLen2);
+        key->compressed = (pkLen2 <= 33);
+    }
+    
+    if (pubKey && size <= pkLen) memcpy(pubKey, key->pubKey, size);
+    return (! pubKey || size <= pkLen) ? size : 0;
+}
+
+size_t MWKeyPubKeyCopy(BRKey *key, void *pubKey, size_t pkLen)
+{
     size_t size = (key->compressed) ? 33 : 65;
     
     assert(key != NULL);
     
     if (pubKey && size <= pkLen) memcpy(pubKey, key->pubKey, size);
-    
+
     return (! pubKey || size <= pkLen) ? size : 0;
 }
 

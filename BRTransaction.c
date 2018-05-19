@@ -518,7 +518,7 @@ int BRTransactionSign(BRTransaction *tx, int forkId, BRKey keys[], size_t keysCo
     assert(keys != NULL || keysCount == 0);
     
     for (i = 0; tx && i < keysCount; i++) {
-        if (! BRKeyAddress(&keys[i], addrs[i].s, sizeof(addrs[i]))) addrs[i] = BR_ADDRESS_NONE;
+        if (! MWKeyAddress(&keys[i], addrs[i].s, sizeof(addrs[i]))) addrs[i] = BR_ADDRESS_NONE;
     }
     
     for (i = 0; tx && i < tx->inCount; i++) {
@@ -531,8 +531,8 @@ int BRTransactionSign(BRTransaction *tx, int forkId, BRKey keys[], size_t keysCo
         
         const uint8_t *elems[BRScriptElements(NULL, 0, input->script, input->scriptLen)];
         size_t elemsCount = BRScriptElements(elems, sizeof(elems)/sizeof(*elems), input->script, input->scriptLen);
-        uint8_t pubKey[BRKeyPubKey(&keys[j], NULL, 0)];
-        size_t pkLen = BRKeyPubKey(&keys[j], pubKey, sizeof(pubKey));
+        uint8_t pubKey[MWKeyPubKey(&keys[j], NULL, 0)];
+        size_t pkLen = MWKeyPubKey(&keys[j], pubKey, sizeof(pubKey));
         uint8_t sig[73], script[1 + sizeof(sig) + 1 + sizeof(pubKey)];
         size_t sigLen, scriptLen;
         UInt256 md = UINT256_ZERO;
