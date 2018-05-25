@@ -57,7 +57,7 @@
 #define PROTOCOL_VERSION   70005
 #define MIN_PROTO_VERSION  70002 // peers earlier than this protocol version not supported (need v0.9 txFee relay rules)
 #define LOCAL_HOST         ((UInt128) { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0x7f, 0x00, 0x00, 0x01 })
-#define CONNECT_TIMEOUT    3.0
+#define CONNECT_TIMEOUT    30.0
 #define MESSAGE_TIMEOUT    10.0
 
 // the standard blockchain download protocol works as follows (for SPV mode):
@@ -195,12 +195,20 @@ static int _BRPeerAcceptVersionMessage(BRPeer *peer, const uint8_t *msg, size_t 
         off += sizeof(uint64_t);
         peer->timestamp = UInt64GetLE(&msg[off]);
         off += sizeof(uint64_t);
+        
+        UInt32GetLE(&msg[off]); // padding for nTime (see maxcoind (full node peer) class CAddress)
+        off += sizeof(uint32_t);
+
         recvServices = UInt64GetLE(&msg[off]);
         off += sizeof(uint64_t);
         recvAddr = UInt128Get(&msg[off]);
         off += sizeof(UInt128);
         recvPort = UInt16GetBE(&msg[off]);
         off += sizeof(uint16_t);
+        
+        UInt32GetLE(&msg[off]); // padding for nTime (see maxcoind (full node peer) class CAddress)
+        off += sizeof(uint32_t);
+
         fromServices = UInt64GetLE(&msg[off]);
         off += sizeof(uint64_t);
         fromAddr = UInt128Get(&msg[off]);
@@ -467,9 +475,9 @@ static int _BRPeerAcceptHeadersMessage(BRPeer *peer, const uint8_t *msg, size_t 
             time_t now = time(NULL);
             UInt256 locators[2];
             
-            BRSHA256_2(&locators[0], &msg[off + 81*(count - 1)], 80);
-            BRSHA256_2(&locators[1], &msg[off], 80);
-
+            MWKeccak256(locators[0].u8, &msg[off + 81*(count - 1)], 80);
+            MWKeccak256(locators[1].u8, &msg[off], 80);
+            
             if (timestamp > 0 && timestamp + 7*24*60*60 + BLOCK_MAX_TIME_DRIFT >= ctx->earliestKeyTime) {
                 // request blocks for the remainder of the chain
                 timestamp = (++last < count) ? UInt32GetLE(&msg[off + 81*last + 68]) : 0;
@@ -478,7 +486,7 @@ static int _BRPeerAcceptHeadersMessage(BRPeer *peer, const uint8_t *msg, size_t 
                     timestamp = (++last < count) ? UInt32GetLE(&msg[off + 81*last + 68]) : 0;
                 }
                 
-                BRSHA256_2(&locators[0], &msg[off + 81*(last - 1)], 80);
+                MWKeccak256(locators[0].u8, &msg[off + 81*(last - 1)], 80);
                 BRPeerSendGetblocks(peer, locators, 2, UINT256_ZERO);
             }
             else BRPeerSendGetheaders(peer, locators, 2, UINT256_ZERO);
@@ -1007,7 +1015,7 @@ static void *_peerThreadRoutine(void *arg)
                         peer_log(peer, "%s", strerror(error));
                     }
                     else if (len == msgLen) {
-                        BRSHA256_2(&hash, payload, msgLen);
+                        MWKeccak256(hash.u8, payload, msgLen);
                         
                         if (UInt32GetLE(&hash) != checksum) { // verify checksum
                             peer_log(peer, "error reading %s, invalid checksum %x, expected %x, payload length:%"PRIu32
@@ -1270,7 +1278,7 @@ void BRPeerSendMessage(BRPeer *peer, const uint8_t *msg, size_t msgLen, const ch
         off += 12;
         UInt32SetLE(&buf[off], (uint32_t)msgLen);
         off += sizeof(uint32_t);
-        BRSHA256_2(hash, msg, msgLen);
+        MWKeccak256(hash, msg, msgLen);
         memcpy(&buf[off], hash, sizeof(uint32_t));
         off += sizeof(uint32_t);
         memcpy(&buf[off], msg, msgLen);
@@ -1299,7 +1307,7 @@ void BRPeerSendVersionMessage(BRPeer *peer)
 {
     BRPeerContext *ctx = (BRPeerContext *)peer;
     size_t off = 0, userAgentLen = strlen(USER_AGENT);
-    uint8_t msg[80 + BRVarIntSize(userAgentLen) + userAgentLen + 5];
+    uint8_t msg[80 + BRVarIntSize(userAgentLen) + userAgentLen + 5 + 8]; // +8 for padding nTime below
     
     UInt32SetLE(&msg[off], PROTOCOL_VERSION); // version
     off += sizeof(uint32_t);
@@ -1307,12 +1315,20 @@ void BRPeerSendVersionMessage(BRPeer *peer)
     off += sizeof(uint64_t);
     UInt64SetLE(&msg[off], time(NULL)); // timestamp
     off += sizeof(uint64_t);
+    
+    UInt32SetLE(&msg[off], 0); // padding for nTime (see maxcoind (full node peer) class CAddress)
+    off += sizeof(uint32_t);
+
     UInt64SetLE(&msg[off], peer->services); // services of remote peer
     off += sizeof(uint64_t);
     UInt128Set(&msg[off], peer->address); // IPv6 address of remote peer
     off += sizeof(UInt128);
     UInt16SetBE(&msg[off], peer->port); // port of remote peer
     off += sizeof(uint16_t);
+
+    UInt32SetLE(&msg[off], 0); // padding for nTime (see maxcoind (full node peer) class CAddress)
+    off += sizeof(uint32_t);
+    
     UInt64SetLE(&msg[off], ENABLED_SERVICES); // services
     off += sizeof(uint64_t);
     UInt128Set(&msg[off], LOCAL_HOST); // IPv4 mapped IPv6 header

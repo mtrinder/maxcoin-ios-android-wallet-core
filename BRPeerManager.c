@@ -63,14 +63,16 @@ static const char *dns_seeds[] = {
 // blockchain checkpoints - these are also used as starting points for partial chain downloads, so they need to be at
 // difficulty transition boundaries in order to verify the block difficulty at the immediately following transition
 static const struct { uint32_t height; const char *hash; uint32_t timestamp; uint32_t target; } checkpoint_array[] = {
-    {       0, "0x0000002d0f86558a6e737a3a351043ee73906fe077692dfaa3c9328aaca21964", 1390822264, 0x1e00ffff },
-    {  25000, "0x000000000000892fe49518331d3ce99075a61ae03fe0c3fb5363babf793f9ed5", 1392463613, 0x1b009988 },
-    {  111111, "0x0000000000023b44c09a7f8740cec05de8d88e7cbc606457cf86c45a8f1c2c1d", 1395065864, 0x1b025a3b },
-    {  557625, "0x0000000000057faf782713f21104bffcfc8cc9107df88dea399b06ffe3e0d6c4", 1408634353, 0x1b05d3f1 },
-    {  630899, "0x0000000000049887343d4bff3be773dafd7980d681c076216fe79fc1131d4068", 1410884581, 0x1b0510f8 }
+    {       0, "0x0000002d0f86558a6e737a3a351043ee73906fe077692dfaa3c9328aaca21964", 1390822264, 0x1e00ffff }//,
+    // Sync from the genesis block, for now
+    //{   25000, "0x000000000000892fe49518331d3ce99075a61ae03fe0c3fb5363babf793f9ed5", 1392463613, 0x1b009988 },
+    //{  111111, "0x0000000000023b44c09a7f8740cec05de8d88e7cbc606457cf86c45a8f1c2c1d", 1395065864, 0x1b025a3b },
+    //{  557625, "0x0000000000057faf782713f21104bffcfc8cc9107df88dea399b06ffe3e0d6c4", 1408634353, 0x1b05d3f1 },
+    //{  630899, "0x0000000000049887343d4bff3be773dafd7980d681c076216fe79fc1131d4068", 1410884581, 0x1b0510f8 }
 };
 
 static const char *dns_seeds[] = {
+    //"127.0.0.1",// for debuging local Maxcoin-Qt
     "a.seed.maxcoinproject.net",
     "b.seed.maxcoinproject.net"
 };
@@ -284,7 +286,8 @@ static size_t _BRPeerManagerBlockLocators(BRPeerManager *manager, UInt256 locato
         }
     }
     
-    if (locators && i < locatorsCount) locators[i] = GENESIS_BLOCK_HASH;
+    if (locators && i < locatorsCount)
+        locators[i] = GENESIS_BLOCK_HASH;
     return ++i;
 }
 
@@ -830,7 +833,8 @@ static void _peerConnected(void *info)
             UInt256 locators[_BRPeerManagerBlockLocators(manager, NULL, 0)];
             size_t count = _BRPeerManagerBlockLocators(manager, locators, sizeof(locators)/sizeof(*locators));
             
-            BRPeerScheduleDisconnect(peer, PROTOCOL_TIMEOUT); // schedule sync timeout
+            // This was disconnecting us before sync completes
+            //BRPeerScheduleDisconnect(peer, PROTOCOL_TIMEOUT); // schedule sync timeout
 
             // request just block headers up to a week before earliestKeyTime, and then merkleblocks after that
             // we do not reset connect failure count yet incase this request times out
@@ -1280,12 +1284,14 @@ static void _peerRelayedBlock(void *info, BRMerkleBlock *block)
             manager->lastOrphan = block;
         }
     }
-    else if (! _BRPeerManagerVerifyBlock(manager, block, prev, peer)) { // block is invalid
+    /* need to implement Kimoto Gravity Well to check difficulty target
+     
+     else if (! _BRPeerManagerVerifyBlock(manager, block, prev, peer)) { // block is invalid
         peer_log(peer, "relayed invalid block");
         BRMerkleBlockFree(block);
         block = NULL;
         _BRPeerManagerPeerMisbehavin(manager, peer);
-    }
+    }*/
     else if (UInt256Eq(block->prevBlock, manager->lastBlock->blockHash)) { // new block extends main chain
         if ((block->height % 500) == 0 || txCount > 0 || block->height >= BRPeerLastBlock(peer)) {
             peer_log(peer, "adding block #%"PRIu32", false positive rate: %f", block->height, manager->fpRate);
@@ -1296,15 +1302,15 @@ static void _peerRelayedBlock(void *info, BRMerkleBlock *block)
         if (txCount > 0) _BRPeerManagerUpdateTx(manager, txHashes, txCount, block->height, txTime);
         if (manager->downloadPeer) BRPeerSetCurrentBlockHeight(manager->downloadPeer, block->height);
             
-        if (block->height < manager->estimatedHeight && peer == manager->downloadPeer) {
+        /*if (block->height < manager->estimatedHeight && peer == manager->downloadPeer) {
             BRPeerScheduleDisconnect(peer, PROTOCOL_TIMEOUT); // reschedule sync timeout
             manager->connectFailureCount = 0; // reset failure count once we know our initial request didn't timeout
-        }
+        }*/
         
-        if ((block->height % BLOCK_DIFFICULTY_INTERVAL) == 0) saveCount = 1; // save transition block immediately
+        //if ((block->height % BLOCK_DIFFICULTY_INTERVAL) == 0) saveCount = 1; // save transition block immediately
         
         if (block->height == manager->estimatedHeight) { // chain download is complete
-            saveCount = (block->height % BLOCK_DIFFICULTY_INTERVAL) + BLOCK_DIFFICULTY_INTERVAL + 1;
+            //saveCount = (block->height % BLOCK_DIFFICULTY_INTERVAL) + BLOCK_DIFFICULTY_INTERVAL + 1;
             _BRPeerManagerLoadMempools(manager);
         }
     }
@@ -1380,7 +1386,7 @@ static void _peerRelayedBlock(void *info, BRMerkleBlock *block)
             manager->lastBlock = block;
             
             if (block->height == manager->estimatedHeight) { // chain download is complete
-                saveCount = (block->height % BLOCK_DIFFICULTY_INTERVAL) + BLOCK_DIFFICULTY_INTERVAL + 1;
+                //saveCount = (block->height % BLOCK_DIFFICULTY_INTERVAL) + BLOCK_DIFFICULTY_INTERVAL + 1;
                 _BRPeerManagerLoadMempools(manager);
             }
         }
@@ -1392,8 +1398,8 @@ static void _peerRelayedBlock(void *info, BRMerkleBlock *block)
         if (block->height > manager->estimatedHeight) manager->estimatedHeight = block->height;
         
         // check if the next block was received as an orphan
-        orphan.prevBlock = block->blockHash;
-        next = BRSetRemove(manager->orphans, &orphan);
+        //orphan.prevBlock = block->blockHash;
+        //next = BRSetRemove(manager->orphans, &orphan);
     }
     
     BRMerkleBlock *saveBlocks[saveCount];
@@ -1575,6 +1581,15 @@ BRPeerManager *BRPeerManagerNew(BRWallet *wallet, uint32_t earliestKeyTime, BRMe
         block = BRMerkleBlockNew();
         block->height = checkpoint_array[i].height;
         block->blockHash = UInt256Reverse(u256_hex_decode(checkpoint_array[i].hash));
+        
+        if (i == 0) {
+            // Genesis block hash (returned from full node) has an extra byte
+            // So we need to add it to our check point to start syncing correctly
+            for (int i=30; i>=0; i--)
+                block->blockHash.u8[i+1] = block->blockHash.u8[i];
+            block->blockHash.u8[0] = 'd';
+        }
+        
         block->timestamp = checkpoint_array[i].timestamp;
         block->target = checkpoint_array[i].target;
         BRSetAdd(manager->checkpoints, block);
