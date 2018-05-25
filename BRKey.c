@@ -515,7 +515,7 @@ size_t MWKeyAddress(BRKey *key, char *addr, size_t addrLen)
     
     if (! UInt160IsZero(hash)) {
         
-        BRKeccak256(keccak, data, sizeof(data));
+        MWKeccak256(keccak, data, sizeof(data));
         memcpy(dataCheck, data, sizeof(data));
         memcpy(&dataCheck[sizeof(data)], keccak, 4);
         
