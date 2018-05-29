@@ -63,12 +63,19 @@ static const char *dns_seeds[] = {
 // blockchain checkpoints - these are also used as starting points for partial chain downloads, so they need to be at
 // difficulty transition boundaries in order to verify the block difficulty at the immediately following transition
 static const struct { uint32_t height; const char *hash; uint32_t timestamp; uint32_t target; } checkpoint_array[] = {
-    {       0, "0x0000002d0f86558a6e737a3a351043ee73906fe077692dfaa3c9328aaca21964", 1390822264, 0x1e00ffff }//,
-    // Sync from the genesis block, for now
-    //{   25000, "0x000000000000892fe49518331d3ce99075a61ae03fe0c3fb5363babf793f9ed5", 1392463613, 0x1b009988 },
-    //{  111111, "0x0000000000023b44c09a7f8740cec05de8d88e7cbc606457cf86c45a8f1c2c1d", 1395065864, 0x1b025a3b },
-    //{  557625, "0x0000000000057faf782713f21104bffcfc8cc9107df88dea399b06ffe3e0d6c4", 1408634353, 0x1b05d3f1 },
-    //{  630899, "0x0000000000049887343d4bff3be773dafd7980d681c076216fe79fc1131d4068", 1410884581, 0x1b0510f8 }
+    {       0, "0000002d0f86558a6e737a3a351043ee73906fe077692dfaa3c9328aaca21964", 1390822264, 0x1e00ffff },
+    {   25000, "000000000000892fe49518331d3ce99075a61ae03fe0c3fb5363babf793f9ed5", 1392463613, 0x1b009988 },
+    {  111111, "0000000000023b44c09a7f8740cec05de8d88e7cbc606457cf86c45a8f1c2c1d", 1395065864, 0x1b025a3b },
+    {  557625, "0000000000057faf782713f21104bffcfc8cc9107df88dea399b06ffe3e0d6c4", 1408634353, 0x1b05d3f1 },
+    {  630899, "0000000000049887343d4bff3be773dafd7980d681c076216fe79fc1131d4068", 1410884581, 0x1b0510f8 },
+    {  975000, "00000000000c06de967e01865fb36589d369cf115d7f7896ac88094ece676887", 1431934411, 0x1b0f2cf5 },
+    {  1500000, "000000000004eb7a6d6aed0d5ba34a9607fe675d07fd4c894bff86e9966d6742", 1463689160, 0x1b4c1eaf },
+    {  1750000, "000000000016a665244fc623dd03f78253eba8e3e17a3bfb80cdf7add6b5d647", 1478826837, 0x1b5b01e9 },
+    {  1875000, "000000000041ab64171e4d304530fc3585997f568c12576561c596bc6c7e91a8", 1486407279, 0x1c0137e6 },
+    {  2000000, "0000000002097db8e565698e7cc838ab084141e24fd57ebffaaff648487c7844", 1493989226, 0x1c077605 },
+    {  2252500, "0000000000442c01055bb696a769d2b408d304caa85fcbdc8eca4c22eb487517", 1509613105, 0x1b66ab2d },
+    {  2353500, "00000000000bc644014a81a3ccbb405e2907e98b4eeefae9236de0ba3bba8a23", 1515978580, 0x1b377529 },
+    {  2500000, "00000000000333d1044f5f77eb2512a8c0b9361536fadb8d9d97c343d7d24561", 1524919577, 0x1b07046c }
 };
 
 static const char *dns_seeds[] = {
@@ -833,8 +840,7 @@ static void _peerConnected(void *info)
             UInt256 locators[_BRPeerManagerBlockLocators(manager, NULL, 0)];
             size_t count = _BRPeerManagerBlockLocators(manager, locators, sizeof(locators)/sizeof(*locators));
             
-            // This was disconnecting us before sync completes
-            //BRPeerScheduleDisconnect(peer, PROTOCOL_TIMEOUT); // schedule sync timeout
+            BRPeerScheduleDisconnect(peer, PROTOCOL_TIMEOUT); // schedule sync timeout
 
             // request just block headers up to a week before earliestKeyTime, and then merkleblocks after that
             // we do not reset connect failure count yet incase this request times out
@@ -1205,8 +1211,8 @@ static void _peerRelayedBlock(void *info, BRMerkleBlock *block)
     size_t txCount = BRMerkleBlockTxHashes(block, NULL, 0);
     UInt256 _txHashes[(sizeof(UInt256)*txCount <= 0x1000) ? txCount : 0],
             *txHashes = (sizeof(UInt256)*txCount <= 0x1000) ? _txHashes : malloc(txCount*sizeof(*txHashes));
-    size_t i, j, fpCount = 0, saveCount = 0;
-    BRMerkleBlock orphan, *b, *b2, *prev, *next = NULL;
+    size_t i, fpCount = 0, saveCount = 0;
+    BRMerkleBlock *b, *b2, *prev;
     uint32_t txTime = 0;
     
     assert(txHashes != NULL);
@@ -1295,6 +1301,8 @@ static void _peerRelayedBlock(void *info, BRMerkleBlock *block)
     else if (UInt256Eq(block->prevBlock, manager->lastBlock->blockHash)) { // new block extends main chain
         if ((block->height % 500) == 0 || txCount > 0 || block->height >= BRPeerLastBlock(peer)) {
             peer_log(peer, "adding block #%"PRIu32", false positive rate: %f", block->height, manager->fpRate);
+            
+            saveCount = 1;
         }
         
         BRSetAdd(manager->blocks, block);
@@ -1302,15 +1310,13 @@ static void _peerRelayedBlock(void *info, BRMerkleBlock *block)
         if (txCount > 0) _BRPeerManagerUpdateTx(manager, txHashes, txCount, block->height, txTime);
         if (manager->downloadPeer) BRPeerSetCurrentBlockHeight(manager->downloadPeer, block->height);
             
-        /*if (block->height < manager->estimatedHeight && peer == manager->downloadPeer) {
+        if (block->height < manager->estimatedHeight && peer == manager->downloadPeer) {
             BRPeerScheduleDisconnect(peer, PROTOCOL_TIMEOUT); // reschedule sync timeout
             manager->connectFailureCount = 0; // reset failure count once we know our initial request didn't timeout
-        }*/
-        
-        //if ((block->height % BLOCK_DIFFICULTY_INTERVAL) == 0) saveCount = 1; // save transition block immediately
+        }
         
         if (block->height == manager->estimatedHeight) { // chain download is complete
-            //saveCount = (block->height % BLOCK_DIFFICULTY_INTERVAL) + BLOCK_DIFFICULTY_INTERVAL + 1;
+            saveCount = BLOCK_SAVE_COUNT;
             _BRPeerManagerLoadMempools(manager);
         }
     }
@@ -1386,7 +1392,7 @@ static void _peerRelayedBlock(void *info, BRMerkleBlock *block)
             manager->lastBlock = block;
             
             if (block->height == manager->estimatedHeight) { // chain download is complete
-                //saveCount = (block->height % BLOCK_DIFFICULTY_INTERVAL) + BLOCK_DIFFICULTY_INTERVAL + 1;
+                saveCount = BLOCK_SAVE_COUNT;
                 _BRPeerManagerLoadMempools(manager);
             }
         }
@@ -1396,10 +1402,6 @@ static void _peerRelayedBlock(void *info, BRMerkleBlock *block)
    
     if (block && block->height != BLOCK_UNKNOWN_HEIGHT) {
         if (block->height > manager->estimatedHeight) manager->estimatedHeight = block->height;
-        
-        // check if the next block was received as an orphan
-        //orphan.prevBlock = block->blockHash;
-        //next = BRSetRemove(manager->orphans, &orphan);
     }
     
     BRMerkleBlock *saveBlocks[saveCount];
@@ -1409,10 +1411,6 @@ static void _peerRelayedBlock(void *info, BRMerkleBlock *block)
         b = BRSetGet(manager->blocks, &b->prevBlock);
     }
     
-    // make sure the set of blocks to be saved starts at a difficulty interval
-    j = (i > 0) ? saveBlocks[i - 1]->height % BLOCK_DIFFICULTY_INTERVAL : 0;
-    if (j > 0) i -= (i > BLOCK_DIFFICULTY_INTERVAL - j) ? BLOCK_DIFFICULTY_INTERVAL - j : i;
-    assert(i == 0 || (saveBlocks[i - 1]->height % BLOCK_DIFFICULTY_INTERVAL) == 0);
     pthread_mutex_unlock(&manager->lock);
     if (i > 0 && manager->saveBlocks) manager->saveBlocks(manager->info, (i > 1 ? 1 : 0), saveBlocks, i);
     
@@ -1420,8 +1418,6 @@ static void _peerRelayedBlock(void *info, BRMerkleBlock *block)
         manager->txStatusUpdate) {
         manager->txStatusUpdate(manager->info); // notify that transaction confirmations may have changed
     }
-    
-    if (next) _peerRelayedBlock(info, next);
 }
 
 static void _peerDataNotfound(void *info, const UInt256 txHashes[], size_t txCount,
@@ -1581,7 +1577,7 @@ BRPeerManager *BRPeerManagerNew(BRWallet *wallet, uint32_t earliestKeyTime, BRMe
         block = BRMerkleBlockNew();
         block->height = checkpoint_array[i].height;
         block->blockHash = UInt256Reverse(u256_hex_decode(checkpoint_array[i].hash));
-        
+
         if (i == 0) {
             // Genesis block hash (returned from full node) has an extra byte
             // So we need to add it to our check point to start syncing correctly
@@ -1601,19 +1597,8 @@ BRPeerManager *BRPeerManagerNew(BRWallet *wallet, uint32_t earliestKeyTime, BRMe
     
     for (size_t i = 0; blocks && i < blocksCount; i++) {
         assert(blocks[i]->height != BLOCK_UNKNOWN_HEIGHT); // height must be saved/restored along with serialized block
-        BRSetAdd(manager->orphans, blocks[i]);
-
-        if ((blocks[i]->height % BLOCK_DIFFICULTY_INTERVAL) == 0 &&
-            (! block || blocks[i]->height > block->height)) block = blocks[i]; // find last transition block
-    }
-    
-    while (block) {
-        BRSetAdd(manager->blocks, block);
-        manager->lastBlock = block;
-        orphan.prevBlock = block->prevBlock;
-        BRSetRemove(manager->orphans, &orphan);
-        orphan.prevBlock = block->blockHash;
-        block = BRSetGet(manager->orphans, &orphan);
+        BRSetAdd(manager->blocks, blocks[i]);
+        manager->lastBlock = blocks[i];
     }
     
     array_new(manager->txRelays, 10);
