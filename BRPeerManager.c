@@ -842,9 +842,9 @@ static void _peerConnected(void *info)
             
             BRPeerScheduleDisconnect(peer, PROTOCOL_TIMEOUT); // schedule sync timeout
 
-            // request just block headers up to a week before earliestKeyTime, and then merkleblocks after that
+            // request just block headers up to a 2 days before earliestKeyTime, and then merkleblocks after that
             // we do not reset connect failure count yet incase this request times out
-            if (manager->lastBlock->timestamp + 7*24*60*60 >= manager->earliestKeyTime) {
+            if (manager->lastBlock->timestamp + 2*24*60*60 >= manager->earliestKeyTime) {
                 BRPeerSendGetblocks(peer, locators, count, UINT256_ZERO);
             }
             else BRPeerSendGetheaders(peer, locators, count, UINT256_ZERO);
@@ -1251,8 +1251,8 @@ static void _peerRelayedBlock(void *info, BRMerkleBlock *block)
         }
     }
 
-    // ignore block headers that are newer than one week before earliestKeyTime (it's a header if it has 0 totalTx)
-    if (block->totalTx == 0 && block->timestamp + 7*24*60*60 > manager->earliestKeyTime + 2*60*60) {
+    // ignore block headers that are newer than 2 days before earliestKeyTime (it's a header if it has 0 totalTx)
+    if (block->totalTx == 0 && block->timestamp + 2*24*60*60 > manager->earliestKeyTime + 2*60*60) {
         BRMerkleBlockFree(block);
         block = NULL;
     }
@@ -1270,7 +1270,7 @@ static void _peerRelayedBlock(void *info, BRMerkleBlock *block)
                  u256_hex_encode(block->blockHash), u256_hex_encode(block->prevBlock),
                  u256_hex_encode(manager->lastBlock->blockHash), manager->lastBlock->height);
         
-        if (block->timestamp + 7*24*60*60 < time(NULL)) { // ignore orphans older than one week ago
+        if (block->timestamp + 2*24*60*60 < time(NULL)) { // ignore orphans older than 2 days ago
             BRMerkleBlockFree(block);
             block = NULL;
         }
@@ -1302,7 +1302,10 @@ static void _peerRelayedBlock(void *info, BRMerkleBlock *block)
         if ((block->height % 500) == 0 || txCount > 0 || block->height >= BRPeerLastBlock(peer)) {
             peer_log(peer, "adding block #%"PRIu32", false positive rate: %f", block->height, manager->fpRate);
             
-            saveCount = 1;
+            uint32_t timestamp = block->timestamp;
+            if (timestamp > 0 && timestamp + 2*24*60*60 + BLOCK_MAX_TIME_DRIFT >= manager->earliestKeyTime) {
+                saveCount = 1;
+            }
         }
         
         BRSetAdd(manager->blocks, block);
@@ -1555,7 +1558,7 @@ BRPeerManager *BRPeerManagerNew(BRWallet *wallet, uint32_t earliestKeyTime, BRMe
                                 const BRPeer peers[], size_t peersCount)
 {
     BRPeerManager *manager = calloc(1, sizeof(*manager));
-    BRMerkleBlock orphan, *block = NULL;
+    BRMerkleBlock *block = NULL;
     
     assert(manager != NULL);
     assert(wallet != NULL);
@@ -1590,7 +1593,7 @@ BRPeerManager *BRPeerManagerNew(BRWallet *wallet, uint32_t earliestKeyTime, BRMe
         block->target = checkpoint_array[i].target;
         BRSetAdd(manager->checkpoints, block);
         BRSetAdd(manager->blocks, block);
-        if (i == 0 || block->timestamp + 7*24*60*60 < manager->earliestKeyTime) manager->lastBlock = block;
+        if (i == 0 || block->timestamp + 2*24*60*60 < manager->earliestKeyTime) manager->lastBlock = block;
     }
 
     block = NULL;
@@ -1776,9 +1779,9 @@ void BRPeerManagerRescan(BRPeerManager *manager)
     pthread_mutex_lock(&manager->lock);
     
     if (manager->isConnected) {
-        // start the chain download from the most recent checkpoint that's at least a week older than earliestKeyTime
+        // start the chain download from the most recent checkpoint that's at least 2 days older than earliestKeyTime
         for (size_t i = CHECKPOINT_COUNT; i > 0; i--) {
-            if (i - 1 == 0 || checkpoint_array[i - 1].timestamp + 7*24*60*60 < manager->earliestKeyTime) {
+            if (i - 1 == 0 || checkpoint_array[i - 1].timestamp + 2*24*60*60 < manager->earliestKeyTime) {
                 UInt256 hash = UInt256Reverse(u256_hex_decode(checkpoint_array[i - 1].hash));
 
                 manager->lastBlock = BRSetGet(manager->blocks, &hash);
