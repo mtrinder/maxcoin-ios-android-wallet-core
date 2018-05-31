@@ -683,8 +683,8 @@ int BRWalletSignTransaction(BRWallet *wallet, BRTransaction *tx, int forkId, con
     BRKey keys[internalCount + externalCount];
 
     if (seed) {
-        MWBIP32PrivKeyList(keys, internalCount, seed, seedLen, SEQUENCE_INTERNAL_CHAIN, internalIdx);
-        MWBIP32PrivKeyList(&keys[internalCount], externalCount, seed, seedLen, SEQUENCE_EXTERNAL_CHAIN, externalIdx);
+        BRBIP32PrivKeyList(keys, internalCount, seed, seedLen, SEQUENCE_INTERNAL_CHAIN, internalIdx);
+        BRBIP32PrivKeyList(&keys[internalCount], externalCount, seed, seedLen, SEQUENCE_EXTERNAL_CHAIN, externalIdx);
         // TODO: XXX wipe seed callback
         seed = NULL;
         if (tx) r = BRTransactionSign(tx, forkId, keys, internalCount + externalCount);
