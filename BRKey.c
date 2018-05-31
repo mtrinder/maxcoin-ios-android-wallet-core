@@ -334,24 +334,6 @@ int MWKeySetPubKey(BRKey *key, const uint8_t *pubKey, size_t pkLen)
     return 1;
 }
 
-// MaxWallet version (test only)
-int MWKeySetPubKeyTest(BRKey *key)
-{
-    size_t pkLen;
-    
-    const uint8_t* pubKey = _BRKeyTestCallback(&pkLen);
-    
-    assert(key != NULL);
-    assert(pubKey != NULL);
-    assert(pkLen == 33 || pkLen == 65);
-    
-    pthread_once(&_ctx_once, _ctx_init);
-    BRKeyClean(key);
-    memcpy(key->pubKey, pubKey, pkLen);
-    key->compressed = (pkLen <= 33);
-    return 1;
-}
-
 // writes the WIF private key to privKey and returns the number of bytes writen, or pkLen needed if privKey is NULL
 // returns 0 on failure
 size_t BRKeyPrivKey(const BRKey *key, char *privKey, size_t pkLen)
@@ -543,6 +525,19 @@ size_t BRKeySign(const BRKey *key, void *sig, size_t sigLen, UInt256 md)
     return sigLen;
 }
 
+// MaxWallet version
+size_t MWKeySign(const BRKey *key, void *sig, size_t sigLen, UInt256 md)
+{
+    assert(key != NULL);
+
+    const uint8_t* mdSigned;
+    UInt256 secret = key->secret;
+    mdSigned = _BRTransactionSign(&secret, &md);
+    memcpy(sig, mdSigned, sigLen);
+    
+    return sigLen;
+}
+
 // returns true if the signature for md is verified to have been made by key
 int BRKeyVerify(BRKey *key, UInt256 md, const void *sig, size_t sigLen)
 {
@@ -561,6 +556,23 @@ int BRKeyVerify(BRKey *key, UInt256 md, const void *sig, size_t sigLen)
         secp256k1_ecdsa_signature_parse_der(_ctx, &s, sig, sigLen)) {
         if (secp256k1_ecdsa_verify(_ctx, &s, md.u8, &pk) == 1) r = 1; // success is 1, all other values are fail
     }
+    
+    return r;
+}
+
+// MaxWallet version
+int MWKeyVerify(BRKey *key, UInt256 md, unsigned char *sig, size_t sigLen)
+{
+    size_t len;
+    int r = 0;
+    
+    assert(key != NULL);
+    assert(sig != NULL || sigLen == 0);
+    assert(sigLen > 0);
+    
+    len = MWKeyPubKey(key, NULL, 0);
+
+    r = _BRTransactionVerify(key->pubKey, &len, &md, sig, &sigLen);
     
     return r;
 }

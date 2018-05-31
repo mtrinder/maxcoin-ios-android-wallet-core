@@ -533,7 +533,7 @@ int BRTransactionSign(BRTransaction *tx, int forkId, BRKey keys[], size_t keysCo
         size_t elemsCount = BRScriptElements(elems, sizeof(elems)/sizeof(*elems), input->script, input->scriptLen);
         uint8_t pubKey[MWKeyPubKey(&keys[j], NULL, 0)];
         size_t pkLen = MWKeyPubKey(&keys[j], pubKey, sizeof(pubKey));
-        uint8_t sig[73], script[1 + sizeof(sig) + 1 + sizeof(pubKey)];
+        uint8_t sig[65], script[1 + sizeof(sig) + 1 + sizeof(pubKey)];
         size_t sigLen, scriptLen;
         UInt256 md = UINT256_ZERO;
         
@@ -541,8 +541,8 @@ int BRTransactionSign(BRTransaction *tx, int forkId, BRKey keys[], size_t keysCo
             uint8_t data[_BRTransactionData(tx, NULL, 0, i, forkId | SIGHASH_ALL)];
             size_t dataLen = _BRTransactionData(tx, data, sizeof(data), i, forkId | SIGHASH_ALL);
             
-            BRSHA256_2(&md, data, dataLen);
-            sigLen = BRKeySign(&keys[j], sig, sizeof(sig) - 1, md);
+            BRSHA256(&md, data, dataLen);
+            sigLen = MWKeySign(&keys[j], sig, sizeof(sig) - 1, md);
             sig[sigLen++] = forkId | SIGHASH_ALL;
             scriptLen = BRScriptPushData(script, sizeof(script), sig, sigLen);
             scriptLen += BRScriptPushData(&script[scriptLen], sizeof(script) - scriptLen, pubKey, pkLen);
@@ -552,8 +552,8 @@ int BRTransactionSign(BRTransaction *tx, int forkId, BRKey keys[], size_t keysCo
             uint8_t data[_BRTransactionData(tx, NULL, 0, i, forkId | SIGHASH_ALL)];
             size_t dataLen = _BRTransactionData(tx, data, sizeof(data), i, forkId | SIGHASH_ALL);
             
-            BRSHA256_2(&md, data, dataLen);
-            sigLen = BRKeySign(&keys[j], sig, sizeof(sig) - 1, md);
+            BRSHA256(&md, data, dataLen);
+            sigLen = MWKeySign(&keys[j], sig, sizeof(sig) - 1, md);
             sig[sigLen++] = forkId | SIGHASH_ALL;
             scriptLen = BRScriptPushData(script, sizeof(script), sig, sigLen);
             BRTxInputSetSignature(input, script, scriptLen);
