@@ -564,7 +564,7 @@ int BRTransactionSign(BRTransaction *tx, int forkId, BRKey keys[], size_t keysCo
         uint8_t data[_BRTransactionData(tx, NULL, 0, SIZE_MAX, 0)];
         size_t len = _BRTransactionData(tx, data, sizeof(data), SIZE_MAX, 0);
         
-        BRSHA256_2(&tx->txHash, data, len);
+        BRSHA256(&tx->txHash, data, len);
         return 1;
     }
     else return 0;
