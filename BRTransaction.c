@@ -397,7 +397,7 @@ BRTransaction *BRTransactionParse(const uint8_t *buf, size_t bufLen)
         BRTransactionFree(tx);
         tx = NULL;
     }
-    else if (isSigned) BRSHA256_2(&tx->txHash, buf, off);
+    else if (isSigned) BRSHA256(&tx->txHash, buf, off);
     
     return tx;
 }
