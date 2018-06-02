@@ -1301,13 +1301,13 @@ static void _peerRelayedBlock(void *info, BRMerkleBlock *block)
     else if (UInt256Eq(block->prevBlock, manager->lastBlock->blockHash)) { // new block extends main chain
         if ((block->height % 500) == 0 || txCount > 0 || block->height >= BRPeerLastBlock(peer)) {
             peer_log(peer, "adding block #%"PRIu32", false positive rate: %f", block->height, manager->fpRate);
-            
-            uint32_t timestamp = block->timestamp;
-            if (timestamp > 0 && timestamp + 2*24*60*60 + BLOCK_MAX_TIME_DRIFT >= manager->earliestKeyTime) {
-                saveCount = 1;
-            }
         }
-        
+
+        uint32_t timestamp = block->timestamp;
+        if (timestamp > 0 && timestamp + 2*24*60*60 + BLOCK_MAX_TIME_DRIFT >= manager->earliestKeyTime) {
+            saveCount = 1;
+        }
+
         BRSetAdd(manager->blocks, block);
         manager->lastBlock = block;
         if (txCount > 0) _BRPeerManagerUpdateTx(manager, txHashes, txCount, block->height, txTime);

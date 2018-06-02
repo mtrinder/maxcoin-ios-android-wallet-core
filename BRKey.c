@@ -378,6 +378,30 @@ size_t MWKeyPrivKey(const BRKey *key, char *privKey, size_t pkLen)
     return pkLen;
 }
 
+int MWKeySetPrivKeyBytes(BRKey *key, const uint8_t *privKey, size_t pkLen)
+{
+    assert(key != NULL);
+    assert(privKey != NULL);
+    assert(pkLen == 32);
+    
+    BRKeyClean(key);
+    memcpy(key->secret.u8, privKey, pkLen);
+    
+    key->compressed = 0;
+    return 1;
+}
+
+size_t MWKeyPrivKeyCopy(BRKey *key, void *privKey)
+{
+    assert(key != NULL);
+    
+    const int privByteLength = 32;
+    
+    if (privKey) memcpy(privKey, key->secret.u8, privByteLength);
+ 
+    return privByteLength;
+}
+
 // writes the DER encoded public key to pubKey and returns number of bytes written, or pkLen needed if pubKey is NULL
 size_t BRKeyPubKey(BRKey *key, void *pubKey, size_t pkLen)
 {

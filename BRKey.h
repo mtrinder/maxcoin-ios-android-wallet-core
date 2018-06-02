@@ -134,10 +134,14 @@ int MWKeySetSecret(BRKey *key, const UInt256 *secret, int compressed);
     
 int MWKeySetPubKey(BRKey *key, const uint8_t *pubKey, size_t pkLen);
 
+int MWKeySetPrivKeyBytes(BRKey *key, const uint8_t *pubKey, size_t pkLen);
+
 size_t MWKeyPubKey(BRKey *key, void *pubKey, size_t pkLen);
 
 size_t MWKeyPubKeyCopy(BRKey *key, void *pubKey, size_t pkLen);
-    
+
+size_t MWKeyPrivKeyCopy(BRKey *key, void *privKey);
+
 size_t MWKeySign(const BRKey *key, void *sig, size_t sigLen, UInt256 md);
 
 int MWKeyVerify(BRKey *key, UInt256 md, unsigned char *sig, size_t sigLen);

@@ -103,7 +103,7 @@ void BRBIP32BitIDKey(BRKey *key, const void *seed, size_t seedLen, uint32_t inde
 
 const uint8_t* (*_BRBIP32PublicKeyFromSecret) (UInt256*, size_t*);
     
-UInt256* (*_BIP32DeriveChildPrivateKey) (UInt256*, UInt256*);
+const uint8_t* (*_BIP32DeriveChildPrivateKey) (UInt256*, UInt256*);
     
 const uint8_t* (*_BIP32DeriveChildPublicKey)(unsigned char * k, size_t* len, UInt256* i);
 

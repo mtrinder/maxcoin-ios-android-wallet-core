@@ -85,13 +85,21 @@ static void _MWCKDpriv(UInt256 *k, UInt256 *c, uint32_t i)
         size_t pkLen;
         const uint8_t* pubKey = _BRBIP32PublicKeyFromSecret(k, &pkLen);
         memcpy(buf, pubKey, pkLen);
+        
+        /*uint8_t temp[pkLen];
+        memcpy(temp, pubKey, pkLen);
+        for (size_t z = 0; z < pkLen; z++) {
+            printf("%02x", temp[z]);
+        }
+        printf("\n");*/
     }
     
     UInt32SetBE(&buf[sizeof(BRECPoint)], i);
     
     BRHMAC(&I, BRSHA512, sizeof(UInt512), c, sizeof(*c), buf, sizeof(buf)); // I = HMAC-SHA512(c, k|P(k) || i)
     
-    k = _BIP32DeriveChildPrivateKey(k, (UInt256 *)&I); // k = IL + k (mod n)
+    const uint8_t* privKey = _BIP32DeriveChildPrivateKey(k, (UInt256 *)&I); // k = IL + k (mod n)
+    memcpy((*k).u8, privKey, 32);
     
     *c = *(UInt256 *)&I.u8[sizeof(UInt256)]; // c = IR
     
@@ -147,8 +155,8 @@ static void _MWCKDpub(BRECPoint *K, UInt256 *c, uint32_t i)
         
         size_t pkLen = sizeof(*K);
         const uint8_t* pubKey = _BIP32DeriveChildPublicKey((unsigned char *)K, &pkLen, (UInt256 *)&I);
-        memcpy((unsigned char *)K, pubKey, pkLen);
-        
+        memcpy(K, pubKey, pkLen);
+
         var_clean(&I);
         mem_clean(buf, sizeof(buf));
     }
