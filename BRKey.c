@@ -442,6 +442,23 @@ size_t MWKeyPubKey(BRKey *key, void *pubKey, size_t pkLen)
     return (! pubKey || size <= pkLen) ? size : 0;
 }
 
+size_t MWKeyUncompressedPubKey(BRKey *key, void *pubKey, size_t pkLen)
+{
+    size_t size = 65;
+    
+    assert(key != NULL);
+    
+    if (pubKey) {
+        size_t pkLen2;
+        const uint8_t* pubKey = _BRBIP32UncompressedPublicKeyFromSecret(&(key->secret), &pkLen2);
+        memcpy(key->pubKey, pubKey, pkLen2);
+        key->compressed = 0;
+    }
+    
+    if (pubKey && size <= pkLen) memcpy(pubKey, key->pubKey, size);
+    return (! pubKey || size <= pkLen) ? size : 0;
+}
+
 size_t MWKeyPubKeyCopy(BRKey *key, void *pubKey, size_t pkLen)
 {
     size_t size = (key->compressed) ? 33 : 65;

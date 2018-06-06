@@ -138,6 +138,8 @@ int MWKeySetPrivKeyBytes(BRKey *key, const uint8_t *pubKey, size_t pkLen);
 
 size_t MWKeyPubKey(BRKey *key, void *pubKey, size_t pkLen);
 
+size_t MWKeyUncompressedPubKey(BRKey *key, void *pubKey, size_t pkLen);
+
 size_t MWKeyPubKeyCopy(BRKey *key, void *pubKey, size_t pkLen);
 
 size_t MWKeyPrivKeyCopy(BRKey *key, void *privKey);
