@@ -1019,7 +1019,7 @@ static void *_peerThreadRoutine(void *arg)
                         
                         if (UInt32GetLE(&hash) != checksum) { // verify checksum
                             peer_log(peer, "error reading %s, invalid checksum %x, expected %x, payload length:%"PRIu32
-                                     ", SHA256_2:%s", type, UInt32GetLE(&hash), checksum, msgLen,
+                                     ", MWKeccak256:%s", type, UInt32GetLE(&hash), checksum, msgLen,
                                      u256_hex_encode(hash));
                             error = EPROTO;
                         }
