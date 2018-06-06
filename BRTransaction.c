@@ -518,9 +518,10 @@ int BRTransactionSign(BRTransaction *tx, int forkId, BRKey keys[], size_t keysCo
     assert(keys != NULL || keysCount == 0);
     
     for (i = 0; tx && i < keysCount; i++) {
+        MWKeyPubKey(&keys[i], NULL, 0); // create public key from secret
         if (! MWKeyAddress(&keys[i], addrs[i].s, sizeof(addrs[i]))) addrs[i] = BR_ADDRESS_NONE;
     }
-    
+
     for (i = 0; tx && i < tx->inCount; i++) {
         BRTxInput *input = &tx->inputs[i];
         
@@ -531,8 +532,8 @@ int BRTransactionSign(BRTransaction *tx, int forkId, BRKey keys[], size_t keysCo
         
         const uint8_t *elems[BRScriptElements(NULL, 0, input->script, input->scriptLen)];
         size_t elemsCount = BRScriptElements(elems, sizeof(elems)/sizeof(*elems), input->script, input->scriptLen);
-        uint8_t pubKey[MWKeyPubKey(&keys[j], NULL, 0)];
-        size_t pkLen = MWKeyPubKey(&keys[j], pubKey, sizeof(pubKey));
+        uint8_t pubKey[MWKeyUncompressedPubKey(&keys[j], NULL, 0)];
+        size_t pkLen = MWKeyUncompressedPubKey(&keys[j], pubKey, sizeof(pubKey));
         uint8_t sig[65], script[1 + sizeof(sig) + 1 + sizeof(pubKey)];
         size_t sigLen, scriptLen;
         UInt256 md = UINT256_ZERO;
@@ -540,8 +541,9 @@ int BRTransactionSign(BRTransaction *tx, int forkId, BRKey keys[], size_t keysCo
         if (elemsCount >= 2 && *elems[elemsCount - 2] == OP_EQUALVERIFY) { // pay-to-pubkey-hash
             uint8_t data[_BRTransactionData(tx, NULL, 0, i, forkId | SIGHASH_ALL)];
             size_t dataLen = _BRTransactionData(tx, data, sizeof(data), i, forkId | SIGHASH_ALL);
-            
+
             BRSHA256(&md, data, dataLen);
+            md = UInt256Reverse(md); // we need to reverse the bytes (this matches maxcoind <- took 2 days to solve this!!)
             sigLen = MWKeySign(&keys[j], sig, sizeof(sig) - 1, md);
             sig[sigLen++] = forkId | SIGHASH_ALL;
             scriptLen = BRScriptPushData(script, sizeof(script), sig, sigLen);
