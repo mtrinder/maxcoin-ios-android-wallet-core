@@ -126,6 +126,7 @@ typedef struct {
     BRTransaction *(*requestedTx)(void *info, UInt256 txHash);
     int (*networkIsReachable)(void *info);
     void (*threadCleanup)(void *info);
+    int (*isRescanning)(void *info);
     void **volatile pongInfo;
     void (**volatile pongCallback)(void *info, int success);
     void *volatile mempoolInfo;
@@ -478,7 +479,7 @@ static int _BRPeerAcceptHeadersMessage(BRPeer *peer, const uint8_t *msg, size_t 
             MWKeccak256(locators[0].u8, &msg[off + 81*(count - 1)], 80);
             MWKeccak256(locators[1].u8, &msg[off], 80);
             
-            if (timestamp > 0 && timestamp + 2*24*60*60 + BLOCK_MAX_TIME_DRIFT >= ctx->earliestKeyTime) {
+            if ((timestamp > 0 && timestamp + 2*24*60*60 + BLOCK_MAX_TIME_DRIFT >= ctx->earliestKeyTime) || ctx->isRescanning(ctx->info)) {
                 // request blocks for the remainder of the chain
                 timestamp = (++last < count) ? UInt32GetLE(&msg[off + 81*last + 68]) : 0;
 
@@ -1091,6 +1092,7 @@ BRPeer *BRPeerNew(void)
 // BRTransaction *requestedTx(void *, UInt256) - called when "getdata" message with a tx hash is received from peer
 // int networkIsReachable(void *) - must return true when networking is available, false otherwise
 // void threadCleanup(void *) - called before a thread terminates to faciliate any needed cleanup
+// int isRescanning(void) - we must get blocks regardless of the time
 void BRPeerSetCallbacks(BRPeer *peer, void *info,
                         void (*connected)(void *info),
                         void (*disconnected)(void *info, int error),
@@ -1104,7 +1106,8 @@ void BRPeerSetCallbacks(BRPeer *peer, void *info,
                         void (*setFeePerKb)(void *info, uint64_t feePerKb),
                         BRTransaction *(*requestedTx)(void *info, UInt256 txHash),
                         int (*networkIsReachable)(void *info),
-                        void (*threadCleanup)(void *info))
+                        void (*threadCleanup)(void *info),
+                        int (*isRescanning)(void *info))
 {
     BRPeerContext *ctx = (BRPeerContext *)peer;
     
@@ -1121,6 +1124,7 @@ void BRPeerSetCallbacks(BRPeer *peer, void *info,
     ctx->requestedTx = requestedTx;
     ctx->networkIsReachable = networkIsReachable;
     ctx->threadCleanup = (threadCleanup) ? threadCleanup : _dummyThreadCleanup;
+    ctx->isRescanning = isRescanning;
 }
 
 // set earliestKeyTime to wallet creation time in order to speed up initial sync

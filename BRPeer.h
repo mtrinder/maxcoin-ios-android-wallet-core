@@ -143,7 +143,8 @@ void BRPeerSetCallbacks(BRPeer *peer, void *info,
                         void (*setFeePerKb)(void *info, uint64_t feePerKb),
                         BRTransaction *(*requestedTx)(void *info, UInt256 txHash),
                         int (*networkIsReachable)(void *info),
-                        void (*threadCleanup)(void *info));
+                        void (*threadCleanup)(void *info),
+                        int (*isRescanning)(void *info));
 
 // set earliestKeyTime to wallet creation time in order to speed up initial sync
 void BRPeerSetEarliestKeyTime(BRPeer *peer, uint32_t earliestKeyTime);

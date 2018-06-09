@@ -79,7 +79,7 @@ static const struct { uint32_t height; const char *hash; uint32_t timestamp; uin
 };
 
 static const char *dns_seeds[] = {
-    //"127.0.0.1",// for debuging local Maxcoin-Qt
+    //"127.0.0.1"//,// for debuging local Maxcoin-Qt
     "a.seed.maxcoinproject.net",
     "b.seed.maxcoinproject.net"
 };
@@ -208,7 +208,7 @@ inline static int _BRBlockHeightEq(const void *block, const void *otherBlock)
 
 struct BRPeerManagerStruct {
     BRWallet *wallet;
-    int isConnected, connectFailureCount, misbehavinCount, dnsThreadCount, maxConnectCount;
+    int isConnected, connectFailureCount, misbehavinCount, dnsThreadCount, maxConnectCount, isRescanning;
     BRPeer *peers, *downloadPeer, fixedPeer, **connectedPeers;
     char downloadPeerName[INET6_ADDRSTRLEN + 6];
     uint32_t earliestKeyTime, syncStartHeight, filterUpdateHeight, estimatedHeight;
@@ -844,7 +844,7 @@ static void _peerConnected(void *info)
 
             // request just block headers up to a 2 days before earliestKeyTime, and then merkleblocks after that
             // we do not reset connect failure count yet incase this request times out
-            if (manager->lastBlock->timestamp + 2*24*60*60 >= manager->earliestKeyTime) {
+            if (manager->lastBlock->timestamp + 2*24*60*60 >= manager->earliestKeyTime || manager->isRescanning == 1) {
                 BRPeerSendGetblocks(peer, locators, count, UINT256_ZERO);
             }
             else BRPeerSendGetheaders(peer, locators, count, UINT256_ZERO);
@@ -1319,6 +1319,7 @@ static void _peerRelayedBlock(void *info, BRMerkleBlock *block)
         }
         
         if (block->height == manager->estimatedHeight) { // chain download is complete
+            manager->isRescanning = 0;
             saveCount = BLOCK_SAVE_COUNT;
             _BRPeerManagerLoadMempools(manager);
         }
@@ -1395,6 +1396,7 @@ static void _peerRelayedBlock(void *info, BRMerkleBlock *block)
             manager->lastBlock = block;
             
             if (block->height == manager->estimatedHeight) { // chain download is complete
+                manager->isRescanning = 0;
                 saveCount = BLOCK_SAVE_COUNT;
                 _BRPeerManagerLoadMempools(manager);
             }
@@ -1539,6 +1541,13 @@ static int _peerNetworkIsReachable(void *info)
     BRPeerManager *manager = ((BRPeerCallbackInfo *)info)->manager;
 
     return (manager->networkIsReachable) ? manager->networkIsReachable(manager->info) : 1;
+}
+
+static int _managerIsRescanning(void *info)
+{
+    BRPeerManager *manager = ((BRPeerCallbackInfo *)info)->manager;
+    
+    return manager->isRescanning;
 }
 
 static void _peerThreadCleanup(void *info)
@@ -1725,7 +1734,7 @@ void BRPeerManagerConnect(BRPeerManager *manager)
                 array_add(manager->connectedPeers, info->peer);
                 BRPeerSetCallbacks(info->peer, info, _peerConnected, _peerDisconnected, _peerRelayedPeers,
                                    _peerRelayedTx, _peerHasTx, _peerRejectedTx, _peerRelayedBlock, _peerDataNotfound,
-                                   _peerSetFeePerKb, _peerRequestedTx, _peerNetworkIsReachable, _peerThreadCleanup);
+                                   _peerSetFeePerKb, _peerRequestedTx, _peerNetworkIsReachable, _peerThreadCleanup, _managerIsRescanning);
                 BRPeerSetEarliestKeyTime(info->peer, manager->earliestKeyTime);
                 BRPeerConnect(info->peer);
             }
@@ -1797,6 +1806,7 @@ void BRPeerManagerRescan(BRPeerManager *manager)
             BRPeerDisconnect(manager->downloadPeer);
         }
 
+        manager->isRescanning = 1;
         manager->syncStartHeight = 0; // a syncStartHeight of 0 indicates that syncing hasn't started yet
         pthread_mutex_unlock(&manager->lock);
         BRPeerManagerConnect(manager);
@@ -1849,7 +1859,7 @@ double BRPeerManagerSyncProgress(BRPeerManager *manager, uint32_t startHeight)
     
     assert(manager != NULL);
     pthread_mutex_lock(&manager->lock);
-    if (startHeight == 0) startHeight = manager->syncStartHeight;
+    if (startHeight == 0 || manager->isRescanning == 1) startHeight = manager->syncStartHeight;
     
     if (! manager->downloadPeer && manager->syncStartHeight == 0) {
         progress = 0.0;
