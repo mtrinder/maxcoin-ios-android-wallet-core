@@ -51,8 +51,8 @@ struct BRWalletStruct {
 
 inline static uint64_t _txFee(uint64_t feePerKb, size_t size)
 {
-    uint64_t standardFee = ((size + 999)/1000)*TX_FEE_PER_KB, // standard fee based on tx size rounded up to nearest kb
-             fee = (((size*feePerKb/1000) + 99)/100)*100; // fee using feePerKb, rounded up to nearest 100 satoshi
+    uint64_t standardFee = TX_MIN_FEE, // standard fee based on tx size rounded up to nearest kb
+             fee = 0;//(((size*feePerKb/1000) + 99)/100)*100; // fee using feePerKb, rounded up to nearest 100 satoshi
     
     return (fee > standardFee) ? fee : standardFee;
 }
@@ -581,7 +581,7 @@ BRTransaction *BRWalletCreateTxForOutputs(BRWallet *wallet, const BRTxOutput out
     
     minAmount = BRWalletMinOutputAmount(wallet);
     pthread_mutex_lock(&wallet->lock);
-    feeAmount = 0;//_txFee(wallet->feePerKb, BRTransactionSize(transaction) + TX_OUTPUT_SIZE);
+    feeAmount = _txFee(wallet->feePerKb, BRTransactionSize(transaction) + TX_OUTPUT_SIZE);
     
     // TODO: use up all UTXOs for all used addresses to avoid leaving funds in addresses whose public key is revealed
     // TODO: avoid combining addresses in a single transaction when possible to reduce information leakage
@@ -599,8 +599,8 @@ BRTransaction *BRWalletCreateTxForOutputs(BRWallet *wallet, const BRTxOutput out
             transaction = NULL;
         
             // check for sufficient total funds before building a smaller transaction
-            if (wallet->balance < amount) break;// + _txFee(wallet->feePerKb, 10 + array_count(wallet->utxos)*TX_INPUT_SIZE +
-                                                //  (outCount + 1)*TX_OUTPUT_SIZE + cpfpSize)) break;
+            if (wallet->balance < amount + _txFee(wallet->feePerKb, 10 + array_count(wallet->utxos)*TX_INPUT_SIZE +
+                                                  (outCount + 1)*TX_OUTPUT_SIZE + cpfpSize)) break;
             pthread_mutex_unlock(&wallet->lock);
 
             if (outputs[outCount - 1].amount > amount + feeAmount + minAmount - balance) {
@@ -628,7 +628,7 @@ BRTransaction *BRWalletCreateTxForOutputs(BRWallet *wallet, const BRTxOutput out
 //            ! _BRWalletTxIsSend(wallet, tx)) cpfpSize += BRTransactionSize(tx);
 
         // fee amount after adding a change output
-        feeAmount = 0;//_txFee(wallet->feePerKb, BRTransactionSize(transaction) + TX_OUTPUT_SIZE + cpfpSize);
+        feeAmount = _txFee(wallet->feePerKb, BRTransactionSize(transaction) + TX_OUTPUT_SIZE + cpfpSize);
 
         // increase fee to round off remaining wallet balance to nearest 100 satoshi
         if (wallet->balance > amount + feeAmount) feeAmount += (wallet->balance - (amount + feeAmount)) % 100;
@@ -1186,7 +1186,7 @@ uint64_t BRWalletMaxOutputAmount(BRWallet *wallet)
     }
 
     txSize = 8 + BRVarIntSize(inCount) + TX_INPUT_SIZE*inCount + BRVarIntSize(2) + TX_OUTPUT_SIZE*2;
-    fee = 0;//_txFee(wallet->feePerKb, txSize + cpfpSize);
+    fee = _txFee(wallet->feePerKb, txSize + cpfpSize);
     pthread_mutex_unlock(&wallet->lock);
     
     return (amount > fee) ? amount - fee : 0;
